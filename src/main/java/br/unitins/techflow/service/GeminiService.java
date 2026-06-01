@@ -5,6 +5,7 @@ import br.unitins.techflow.model.Categoria;
 import br.unitins.techflow.model.Solucao;
 import br.unitins.techflow.repository.CategoriaRepository;
 import br.unitins.techflow.repository.SolucaoRepository;
+import br.unitins.techflow.controller.IaController;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
@@ -110,6 +111,106 @@ public class GeminiService {
                 .body(String.class);
 
         return extrairTextoSimples(respostaGemini);
+    }
+
+    public List<IaController.ResultadoBuscaBaseResponse> buscarBaseConhecimento(
+            String pergunta,
+            List<Map<String, Object>> entradas
+    ) {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new RuntimeException("Chave da Gemini API não configurada");
+        }
+
+        String baseConhecimento = entradas.stream()
+                .map(item -> "ID " + item.get("id")
+                        + " | Título: " + item.get("titulo")
+                        + " | Categoria: " + item.get("categoria")
+                        + " | Solução: " + item.get("solucao"))
+                .collect(Collectors.joining("\n"));
+
+        if (baseConhecimento.isBlank()) {
+            baseConhecimento = "Nenhuma solução cadastrada.";
+        }
+
+        String prompt = """
+            Você é a busca inteligente de uma base de conhecimento de suporte de TI.
+
+            O usuário descreveu um problema. Analise a base abaixo e selecione os itens mais relevantes.
+            Retorne no máximo 4 resultados, ordenados do mais relevante para o menos relevante.
+
+            BASE DE CONHECIMENTO:
+            %s
+
+            PROBLEMA DO USUÁRIO:
+            %s
+
+            Responda SOMENTE com JSON válido, sem markdown, sem explicações e sem texto fora do JSON.
+
+            Use exatamente este formato:
+            [
+              {
+                "id": 1,
+                "motivo": "Essa solução é relevante porque trata de problema semelhante."
+              }
+            ]
+            """.formatted(baseConhecimento, pergunta);
+
+        Map<String, Object> body = Map.of(
+                "contents", List.of(
+                        Map.of(
+                                "parts", List.of(
+                                        Map.of("text", prompt)
+                                )
+                        )
+                )
+        );
+
+        String respostaGemini = restClient.post()
+                .uri(apiUrl)
+                .header("x-goog-api-key", apiKey)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .body(String.class);
+
+        return converterRespostaBuscaBase(respostaGemini);
+    }
+
+    private List<IaController.ResultadoBuscaBaseResponse> converterRespostaBuscaBase(String respostaGemini) {
+        try {
+            JsonNode root = objectMapper.readTree(respostaGemini);
+
+            String texto = root
+                    .path("candidates")
+                    .path(0)
+                    .path("content")
+                    .path("parts")
+                    .path(0)
+                    .path("text")
+                    .asText();
+
+            String jsonLimpo = limparJson(texto);
+
+            JsonNode lista = objectMapper.readTree(jsonLimpo);
+
+            if (!lista.isArray()) {
+                return List.of();
+            }
+
+            java.util.ArrayList<IaController.ResultadoBuscaBaseResponse> resultados = new java.util.ArrayList<>();
+
+            for (JsonNode item : lista) {
+                resultados.add(new IaController.ResultadoBuscaBaseResponse(
+                        item.path("id").asLong(),
+                        item.path("motivo").asText()
+                ));
+            }
+
+            return resultados;
+
+        } catch (Exception e) {
+            throw new RuntimeException("Erro ao processar busca na base de conhecimento: " + e.getMessage(), e);
+        }
     }
 
     private String extrairTextoSimples(String respostaGemini) {

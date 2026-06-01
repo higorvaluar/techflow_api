@@ -7,6 +7,9 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+import java.util.Map;
+
 @RestController
 @RequestMapping("/ia")
 public class IaController {
@@ -44,6 +47,30 @@ public class IaController {
 
     public record ResumoSolucaoResponse(
             String resumo
+    ) {
+    }
+
+    @PostMapping("/buscar-base")
+    public ResponseEntity<List<ResultadoBuscaBaseResponse>> buscarBaseConhecimento(
+            @RequestBody BuscaBaseRequest request
+    ) {
+        return ResponseEntity.ok(
+                geminiService.buscarBaseConhecimento(
+                        request.pergunta(),
+                        request.entradas()
+                )
+        );
+    }
+
+    public record BuscaBaseRequest(
+            String pergunta,
+            List<Map<String, Object>> entradas
+    ) {
+    }
+
+    public record ResultadoBuscaBaseResponse(
+            Long id,
+            String motivo
     ) {
     }
 }
