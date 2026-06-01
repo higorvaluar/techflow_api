@@ -5,6 +5,8 @@ import br.unitins.techflow.service.DashboardService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/dashboard")
 public class DashboardController {
@@ -18,5 +20,10 @@ public class DashboardController {
     @GetMapping("/resumo")
     public ResponseEntity<DashboardResumoDTO> gerarResumo() {
         return ResponseEntity.ok(dashboardService.gerarResumo());
+    }
+
+    @GetMapping("/charts")
+    public ResponseEntity<Map<String, Object>> gerarCharts() {
+        return ResponseEntity.ok(dashboardService.gerarCharts());
     }
 }
