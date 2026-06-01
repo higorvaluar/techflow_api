@@ -4,6 +4,7 @@ import br.unitins.techflow.model.Tecnico;
 import br.unitins.techflow.repository.TecnicoRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -12,9 +13,14 @@ import org.springframework.web.server.ResponseStatusException;
 public class AuthController {
 
     private final TecnicoRepository tecnicoRepository;
+    private final BCryptPasswordEncoder passwordEncoder;
 
-    public AuthController(TecnicoRepository tecnicoRepository) {
+    public AuthController(
+            TecnicoRepository tecnicoRepository,
+            BCryptPasswordEncoder passwordEncoder
+    ) {
         this.tecnicoRepository = tecnicoRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @PostMapping("/login")
@@ -25,7 +31,7 @@ public class AuthController {
                         "E-mail ou senha inválidos"
                 ));
 
-        if (!tecnico.getSenha().equals(request.senha())) {
+        if (!senhaConfere(request.senha(), tecnico)) {
             throw new ResponseStatusException(
                     HttpStatus.UNAUTHORIZED,
                     "E-mail ou senha inválidos"
@@ -45,6 +51,37 @@ public class AuthController {
         );
 
         return ResponseEntity.ok(response);
+    }
+
+    private boolean senhaConfere(String senhaInformada, Tecnico tecnico) {
+        if (senhaInformada == null || senhaInformada.isBlank()) {
+            return false;
+        }
+
+        String senhaBanco = tecnico.getSenha();
+
+        if (senhaBanco == null || senhaBanco.isBlank()) {
+            return false;
+        }
+
+        if (senhaJaEstaCriptografada(senhaBanco)) {
+            return passwordEncoder.matches(senhaInformada, senhaBanco);
+        }
+
+        boolean senhaAntigaConfere = senhaBanco.equals(senhaInformada);
+
+        if (senhaAntigaConfere) {
+            tecnico.setSenha(passwordEncoder.encode(senhaInformada));
+            tecnicoRepository.save(tecnico);
+        }
+
+        return senhaAntigaConfere;
+    }
+
+    private boolean senhaJaEstaCriptografada(String senha) {
+        return senha.startsWith("$2a$")
+                || senha.startsWith("$2b$")
+                || senha.startsWith("$2y$");
     }
 
     private String normalizarNivel(String nivelAcesso) {

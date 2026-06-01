@@ -2,6 +2,7 @@ package br.unitins.techflow.service;
 
 import br.unitins.techflow.model.Tecnico;
 import br.unitins.techflow.repository.TecnicoRepository;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -10,9 +11,14 @@ import java.util.List;
 public class TecnicoService {
 
     private final TecnicoRepository tecnicoRepository;
+    private final BCryptPasswordEncoder passwordEncoder;
 
-    public TecnicoService(TecnicoRepository tecnicoRepository) {
+    public TecnicoService(
+            TecnicoRepository tecnicoRepository,
+            BCryptPasswordEncoder passwordEncoder
+    ) {
         this.tecnicoRepository = tecnicoRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     public List<Tecnico> listarTodos() {
@@ -25,6 +31,9 @@ public class TecnicoService {
     }
 
     public Tecnico criar(Tecnico tecnico) {
+        tecnico.setSenha(criptografarSenha(tecnico.getSenha()));
+        tecnico.setNivelAcesso(normalizarNivel(tecnico.getNivelAcesso()));
+
         return tecnicoRepository.save(tecnico);
     }
 
@@ -33,8 +42,11 @@ public class TecnicoService {
 
         tecnico.setNome(tecnicoAtualizado.getNome());
         tecnico.setEmail(tecnicoAtualizado.getEmail());
-        tecnico.setSenha(tecnicoAtualizado.getSenha());
-        tecnico.setNivelAcesso(tecnicoAtualizado.getNivelAcesso());
+        tecnico.setNivelAcesso(normalizarNivel(tecnicoAtualizado.getNivelAcesso()));
+
+        if (tecnicoAtualizado.getSenha() != null && !tecnicoAtualizado.getSenha().isBlank()) {
+            tecnico.setSenha(criptografarSenha(tecnicoAtualizado.getSenha()));
+        }
 
         return tecnicoRepository.save(tecnico);
     }
@@ -42,5 +54,39 @@ public class TecnicoService {
     public void deletar(Long id) {
         Tecnico tecnico = buscarPorId(id);
         tecnicoRepository.delete(tecnico);
+    }
+
+    private String criptografarSenha(String senha) {
+        if (senha == null || senha.isBlank()) {
+            throw new RuntimeException("A senha é obrigatória");
+        }
+
+        if (senhaJaEstaCriptografada(senha)) {
+            return senha;
+        }
+
+        return passwordEncoder.encode(senha);
+    }
+
+    private boolean senhaJaEstaCriptografada(String senha) {
+        return senha.startsWith("$2a$")
+                || senha.startsWith("$2b$")
+                || senha.startsWith("$2y$");
+    }
+
+    private String normalizarNivel(String nivel) {
+        if (nivel == null || nivel.isBlank()) {
+            return "COLABORADOR";
+        }
+
+        if (nivel.equalsIgnoreCase("Admin")) {
+            return "ADMIN";
+        }
+
+        if (nivel.equalsIgnoreCase("Colaborador")) {
+            return "COLABORADOR";
+        }
+
+        return nivel.toUpperCase();
     }
 }
