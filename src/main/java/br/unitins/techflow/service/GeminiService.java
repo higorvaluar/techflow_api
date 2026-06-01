@@ -70,6 +70,71 @@ public class GeminiService {
         return converterResposta(respostaGemini);
     }
 
+    public String resumirSolucao(String problemaTitulo, String descricaoSolucao) {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new RuntimeException("Chave da Gemini API não configurada");
+        }
+
+        String prompt = """
+            Você é um analista de suporte de TI.
+
+            Resuma a solução técnica abaixo em no máximo 3 linhas.
+            O resumo deve ser em português, objetivo, sem lista, sem markdown e sem rótulos.
+            Não comece com "A solução foi" ou "Resumo:".
+
+            Problema:
+            %s
+
+            Solução aplicada:
+            %s
+
+            Responda apenas com o resumo final.
+            """.formatted(problemaTitulo, descricaoSolucao);
+
+        Map<String, Object> body = Map.of(
+                "contents", List.of(
+                        Map.of(
+                                "parts", List.of(
+                                        Map.of("text", prompt)
+                                )
+                        )
+                )
+        );
+
+        String respostaGemini = restClient.post()
+                .uri(apiUrl)
+                .header("x-goog-api-key", apiKey)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .body(String.class);
+
+        return extrairTextoSimples(respostaGemini);
+    }
+
+    private String extrairTextoSimples(String respostaGemini) {
+        try {
+            JsonNode root = objectMapper.readTree(respostaGemini);
+
+            String texto = root
+                    .path("candidates")
+                    .path(0)
+                    .path("content")
+                    .path("parts")
+                    .path(0)
+                    .path("text")
+                    .asText();
+
+            return texto
+                    .replace("Resumo:", "")
+                    .replace("resumo:", "")
+                    .trim();
+
+        } catch (Exception e) {
+            throw new RuntimeException("Erro ao processar resposta da Gemini API: " + e.getMessage(), e);
+        }
+    }
+
     private String montarPrompt(String descricaoProblema) {
         String categorias = categoriaRepository.findAll()
                 .stream()

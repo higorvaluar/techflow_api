@@ -23,4 +23,27 @@ public class IaController {
     ) {
         return ResponseEntity.ok(geminiService.analisarProblema(request.descricaoProblema()));
     }
+
+    @PostMapping("/resumir-solucao")
+    public ResponseEntity<ResumoSolucaoResponse> resumirSolucao(
+            @RequestBody ResumoSolucaoRequest request
+    ) {
+        String resumo = geminiService.resumirSolucao(
+                request.problemaTitulo(),
+                request.descricaoSolucao()
+        );
+
+        return ResponseEntity.ok(new ResumoSolucaoResponse(resumo));
+    }
+
+    public record ResumoSolucaoRequest(
+            String problemaTitulo,
+            String descricaoSolucao
+    ) {
+    }
+
+    public record ResumoSolucaoResponse(
+            String resumo
+    ) {
+    }
 }
